@@ -587,14 +587,12 @@
                 };
 
                 // Handle the response
-                if (data.report || data.content || data.result) {
-                    const reportText = data.report || data.content || data.result || JSON.stringify(data, null, 2);
-                    showReport(reportText, data);
-                } else if (data.error) {
+                if (data.error) {
                     throw new Error(data.error);
                 } else {
-                    // If response structure is different, show the entire response
-                    showReport(JSON.stringify(data, null, 2), data);
+                    // Format JSON response into presentation format
+                    const formattedReport = formatJSONResponse(data);
+                    showReport(formattedReport, data);
                 }
 
             } catch (error) {
@@ -607,16 +605,57 @@
             }
         }
 
+        function formatJSONResponse(data) {
+            let formatted = '';
+            
+            // Handle different JSON structures
+            if (data.report) {
+                formatted = data.report;
+            } else if (data.title && data.content) {
+                formatted = `# ${data.title}\n\n${data.content}`;
+            } else if (data.summary) {
+                formatted = data.summary;
+            } else if (data.papers && Array.isArray(data.papers)) {
+                // Format array of papers
+                formatted = '# Research Papers Analysis\n\n';
+                data.papers.forEach((paper, index) => {
+                    formatted += `## ${index + 1}. ${paper.title || 'Paper ' + (index + 1)}\n\n`;
+                    if (paper.authors) formatted += `**Authors:** ${paper.authors}\n\n`;
+                    if (paper.published) formatted += `**Published:** ${paper.published}\n\n`;
+                    if (paper.summary) formatted += `**Summary:** ${paper.summary}\n\n`;
+                    if (paper.link) formatted += `**Link:** ${paper.link}\n\n`;
+                    formatted += '---\n\n';
+                });
+            } else {
+                // Pretty print entire JSON
+                formatted = '# Research Report\n\n```json\n' + JSON.stringify(data, null, 2) + '\n```';
+            }
+            
+            return formatted;
+        }
+
         function showReport(content, data) {
-            reportContent.textContent = content;
+            // Convert markdown-style formatting to HTML
+            const htmlContent = content
+                .replace(/^# (.+)$/gm, '<h2 style="color: #0ea5e9; margin-top: 20px; margin-bottom: 12px; font-size: 1.5rem;">$1</h2>')
+                .replace(/^## (.+)$/gm, '<h3 style="color: #0284c7; margin-top: 16px; margin-bottom: 10px; font-size: 1.25rem;">$1</h3>')
+                .replace(/^### (.+)$/gm, '<h4 style="color: #06b6d4; margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem;">$1</h4>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong style="color: #1e293b;">$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/^---$/gm, '<hr style="margin: 20px 0; border: none; border-top: 2px solid #e2e8f0;">')
+                .replace(/\n\n/g, '</p><p style="margin-bottom: 12px;">')
+                .replace(/```json\n([\s\S]*?)\n```/g, '<pre style="background: #1e293b; color: #10b981; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 0.9rem;">$1</pre>');
+            
+            reportContent.innerHTML = '<p style="margin-bottom: 12px;">' + htmlContent + '</p>';
             
             // Update stats
-            const words = content.trim().split(/\s+/).length;
+            const plainText = content.replace(/<[^>]*>/g, '').replace(/[#*`-]/g, '');
+            const words = plainText.trim().split(/\s+/).length;
             wordCount.textContent = words.toLocaleString();
             
             // Try to extract stats from data if available
-            papersCount.textContent = data?.papersAnalyzed || data?.papers || '20';
-            citationsCount.textContent = data?.citations || data?.totalCitations || '47';
+            papersCount.textContent = data?.papersAnalyzed || data?.papers?.length || data?.totalPapers || '20';
+            citationsCount.textContent = data?.citations || data?.totalCitations || data?.citationCount || '47';
             
             reportContainer.classList.add('active');
         }
